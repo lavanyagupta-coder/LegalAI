@@ -1,0 +1,220 @@
+<!-- analyzer.html -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LegalDocsAI — Analyzer</title>
+  <link rel="stylesheet" href="css/styleanylser.css">
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo">G</div>
+      <div class="brand-text">
+        <div class="title">LegalDocsAI</div>
+        <div class="subtitle">AI Powered PDF Analysis</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <label class="upload-btn">
+        <input id="fileInput" type="file" accept=".pdf,.doc,.docx,.txt" />
+        Upload Document
+      </label>
+      <button id="analyzeBtn" class="primary" disabled>Analyze</button>
+    </div>
+  </div>
+
+  <main class="container">
+    <section class="viewer">
+      <div class="doc-header">Document: <span id="docName">No file selected</span></div>
+      <div class="preview">
+        <iframe id="pdfFrame" src="" frameborder="0"></iframe>
+        <div id="noPreview" class="no-preview">Choose or upload a PDF, DOC, DOCX, or TXT file to analyze</div>
+      </div>
+    </section>
+
+    <aside class="sidebar">
+      <div class="card summary">
+        <div class="card-title">Summary & Key Findings</div>
+        <div id="sentiment" class="sentiment">Sentiment: —</div>
+        <ul id="summaryBullets" class="bullets">
+        </ul>
+      </div>
+
+      <div class="card clauses">
+        <div class="card-title">Clause Breakdown</div>
+        <div id="clauseList" class="clause-list"></div>
+      </div>
+
+      <div class="card timeline">
+        <div class="card-title">Timeline of Events</div>
+        <div id="timelineContent">
+          <div><strong>Draft:</strong> —</div>
+          <div><strong>Signing:</strong> —</div>
+          <div><strong>Expiry:</strong> —</div>
+        </div>
+      </div>
+
+      <div class="card actions">
+        <button id="reportBtn" class="primary" disabled>Generate Report (PDF/DOCX)</button>
+        <button id="shareBtn">Share Analysis</button>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="footer" id="analysisFooter">No document analyzed yet</footer>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const pdfFrame = document.getElementById('pdfFrame');
+    const noPreview = document.getElementById('noPreview');
+    const docName = document.getElementById('docName');
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const reportBtn = document.getElementById('reportBtn');
+    const shareBtn = document.getElementById('shareBtn');
+    const footer = document.getElementById('analysisFooter');
+
+    let selectedFile = null;
+    let currentAnalysis = null;
+
+    fileInput.addEventListener('change', (ev) => {
+      const f = ev.target.files && ev.target.files[0];
+      if (!f) return;
+      selectedFile = f;
+      docName.textContent = f.name;
+
+      if (f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')) {
+        const url = URL.createObjectURL(f);
+        pdfFrame.src = url;
+        pdfFrame.style.display = 'block';
+        noPreview.style.display = 'none';
+      } else {
+        pdfFrame.removeAttribute('src');
+        pdfFrame.style.display = 'none';
+        noPreview.textContent = 'Preview is available for PDF files. This document can still be analyzed.';
+        noPreview.style.display = 'flex';
+      }
+
+      analyzeBtn.disabled = false;
+    });
+
+    analyzeBtn.addEventListener('click', async () => {
+      if (!selectedFile) return;
+
+      analyzeBtn.disabled = true;
+      analyzeBtn.textContent = 'Analyzing...';
+
+      try {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+
+        const response = await fetch('http://127.0.0.1:8016/analyze', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) {
+          throw new Error(`Analysis failed: ${response.status}`);
+        }
+
+        currentAnalysis = await response.json();
+        currentAnalysis.uploadedAt = new Date().toISOString();
+        sessionStorage.setItem('analysisResult', JSON.stringify(currentAnalysis));
+        sessionStorage.setItem('analyzedFileName', selectedFile.name);
+        showAnalysis(currentAnalysis);
+        reportBtn.disabled = false;
+      } catch (error) {
+        noPreview.textContent = error.message;
+        noPreview.style.display = 'flex';
+      } finally {
+        analyzeBtn.disabled = false;
+        analyzeBtn.textContent = 'Analyze';
+      }
+    });
+
+    reportBtn.addEventListener('click', () => {
+      window.location.href = 'fullsum.html';
+    });
+
+    shareBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(window.location.href).then(() => {
+        alert('Analysis link copied to clipboard.');
+      }).catch(() => {
+        alert('Unable to copy link.');
+      });
+    });
+
+    function showAnalysis(a) {
+      const sentimentDiv = document.getElementById('sentiment');
+      const riskScore = a.scores?.risk_score ?? 0;
+      sentimentDiv.innerHTML = `Risk: <strong>${a.risk || 'Unknown'}</strong> (${riskScore}%)`;
+
+      const ul = document.getElementById('summaryBullets');
+      ul.innerHTML = '';
+      const bullets = [
+        a.summary || 'No summary available.',
+        `Flagged ${(a.risks || []).length} potential risks`,
+        `Extracted ${(a.clauses || []).length} key clauses`
+      ];
+      bullets.forEach(b => {
+        const li = document.createElement('li'); li.textContent = b; ul.appendChild(li);
+      });
+
+      const clDiv = document.getElementById('clauseList');
+      clDiv.innerHTML = '';
+      (a.clauses || []).forEach(c => {
+        const el = document.createElement('div');
+        el.className = 'clause-item';
+        const clauseRisk = (c.risk || 'Medium').toLowerCase();
+        el.innerHTML = `<div class="clause-name">${c.title}</div>
+                        <div class="clause-right">
+                          <span class="risk ${clauseRisk}">${c.risk || 'Medium'} Risk</span>
+                          <div class="clause-detail">${c.summary || ''}</div>
+                        </div>`;
+        clDiv.appendChild(el);
+      });
+      if (!clDiv.innerHTML) {
+        clDiv.innerHTML = '<div class="clause-item"><div class="clause-name">No clauses extracted</div></div>';
+      }
+
+      const tl = document.getElementById('timelineContent');
+      tl.innerHTML = `<div><strong>Document Type:</strong> ${a.document_type || 'Legal document'}</div>
+                      <div><strong>Readable Characters:</strong> ${a.stats?.text_length || 0}</div>
+                      <div><strong>Confidence:</strong> ${a.scores?.confidence || 0}%</div>`;
+
+      const summaryCard = document.querySelector('.summary');
+      let recTitle = document.querySelector('.rec-title');
+      let recList = document.querySelector('.rec-list');
+      if (!recTitle) {
+        recTitle = document.createElement('div');
+        recTitle.className = 'rec-title';
+        recTitle.textContent = 'Recommendations';
+        recList = document.createElement('ul');
+        recList.className = 'rec-list';
+        summaryCard.appendChild(recTitle);
+        summaryCard.appendChild(recList);
+      }
+      recList.innerHTML = '';
+      (a.recommendations || []).forEach(r => {
+        const li = document.createElement('li'); li.textContent = r; recList.appendChild(li);
+      });
+      if (!recList.innerHTML) {
+        recList.innerHTML = '<li>No recommendations generated.</li>';
+      }
+
+      footer.textContent = `Parsed & analyzed: ${a.filename || docName.textContent}`;
+    }
+
+    const savedAnalysis = sessionStorage.getItem('analysisResult');
+    const savedName = sessionStorage.getItem('analyzedFileName');
+    if (savedAnalysis) {
+      currentAnalysis = JSON.parse(savedAnalysis);
+      docName.textContent = savedName || currentAnalysis.filename || 'Uploaded document';
+      reportBtn.disabled = false;
+      showAnalysis(currentAnalysis);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pricing</title>
+<style>
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f5faff;
+    color: #333;
+}
+
+/* Navigation */
+nav {
+    background: #fff;
+    padding: 15px 30px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+nav .nav-link {
+    margin-right: 20px;
+    text-decoration: none;
+    color: #0077cc;
+    font-weight: bold;
+}
+
+nav .nav-link:hover {
+    color: #005999;
+}
+.pricing-card {
+    flex: 1 1 250px;
+    min-height: 380px; /* smaller height */
+    background: #e9f3ff;
+    padding: 20px; /* reduced padding */
+    border-radius: 12px;
+    text-align: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transition: transform 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    border-bottom: 3px solid #0077cc;
+}
+
+.pricing-card h2 {
+    margin-bottom: 8px;
+    font-size: 1.2rem; /* slightly smaller */
+    color: #0077cc;
+}
+/* Pricing Container */
+.pricing-container {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    padding: 30px 20px 20px;  /* smaller top padding */
+    margin-top: -10px;        /* just a slight upward shift */
+
+}
+
+
+
+.pricing-card:hover {
+    transform: translateY(-8px);
+}
+
+
+.pricing-card p {
+    margin-bottom: 20px;
+    line-height: 1.5;
+    color: #444;
+}
+
+.features-list {
+    text-align: left;
+    margin-bottom: 20px;
+    color: #222;
+}
+
+.features-list li {
+    margin: 8px 0;
+}
+
+/* Button */
+.pricing-card button {
+    background: #0077cc;
+    border: none;
+
+    border-radius: 8px;
+    color: #fff;
+    cursor: pointer;
+    transition: background 0.3s ease;
+    
+    padding: 10px 16px; /* smaller button */
+    font-size: 0.9rem;
+}
+
+.pricing-card button:hover {
+    background: #005999;
+}
+.trial-note {
+    text-align: center;
+    background: #d0e7ff;
+    color: #005999;
+    padding: 15px 20px;
+    margin: 15px 0 25px;   /* no auto */
+    border-radius: 12px;
+    max-width: 800px;
+    font-size: 1rem;
+    font-weight: bold;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;   /* 👈 centers horizontally */
+    margin-right: auto;
+}
+
+
+/* Clickable trial link */
+.trial-link {
+    text-decoration: none;
+    color: #005999;
+    background: #c0e0ff;
+    padding: 8px 12px;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.trial-link:hover {
+    background: #0077cc;
+    color: #fff;
+    transform: scale(1.05);
+}
+</style>
+</head>
+<body>
+  <!-- Pricing Header -->
+<section class="pricing-header" style="text-align:center; padding: 40px 20px;">
+    <h1 style="color: #0077cc; font-weight: bold; margin-bottom: 10px;">Find The Best Plan For You</h1>
+    <p style="color: #333; font-size: 1rem; max-width: 600px; margin: 0 auto;">
+        Join thousands of users who trust LegalAI to simplify their legal document needs every day!
+    </p>
+</section>
+
+<section class="pricing-container">
+
+    <!-- Free Access -->
+    <div class="pricing-card">
+        <h2>Free Access</h2>
+        <p>Perfect for individuals who want to explore the basics before committing.</p>
+        <ul class="features-list">
+            <li>✔ Generate simple legal documents</li>
+            <li>✔ Create basic rent agreements</li>
+            <li>✔ Limited AI-powered insights</li>
+            <li>✔ Email support only</li>
+        </ul>
+    
+
+        <button>Start Free</button>
+    </div>
+
+    <!-- 1-Month Plan -->
+    <div class="pricing-card">
+        <h2>1-Month Plan</h2>
+        <p>Best for professionals who need quick access to advanced features without a long-term commitment.</p>
+        <ul class="features-list">
+            <li>✔ Full access to legal document creation</li>
+            <li>✔ Create rent agreements, NDAs, and contracts</li>
+            <li>✔ AI-powered suggestions for clauses</li>
+            <li>✔ Priority chat & email support</li>
+        </ul>
+        <p><strong>₹499 / month</strong></p>
+        <button>Subscribe</button>
+    </div>
+
+    <!-- 3-Month Plan -->
+    <div class="pricing-card">
+        <h2>3-Month Plan</h2>
+        <p>Great for startups and small businesses looking for cost-effective solutions.</p>
+        <ul class="features-list">
+            <li>✔ Everything in 1-Month Plan</li>
+            <li>✔ Bulk document creation</li>
+            <li>✔ Multi-user collaboration</li>
+            <li>✔ Dedicated legal expert guidance</li>
+        </ul>
+        <p><strong>₹1299 / 3 months</strong></p>
+        <button>Subscribe</button>
+    </div>
+
+</section>
+
+<!-- Trial note for premium plans with emojis and clickable link -->
+<div class="trial-note">
+    <a href="#" class="trial-link">7-Day Free Trial for Premium Plans!</a>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LegalAI Chat</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* Import font */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  background: linear-gradient(135deg, #f5f7fa, #e6ebff);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+/* Chat Container */
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  width: 95%;
+  max-width: 1050px;
+  height: 88vh;
+  background: #ffffff;
+  border: 2px solid #d6daf5;
+  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.1);
+  border-radius: 0; /* 🔑 NO rounded corners */
+  overflow: hidden;
+}
+
+/* Header */
+.chat-header {
+  background: linear-gradient(90deg, #004aad, #187bff);
+  padding: 16px 22px;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 3px solid #00398b;
+  border-radius: 0; /* Sharp header */
+}
+
+.chat-header img {
+  width: 26px;
+  height: 26px;
+}
+
+/* Chat Messages */
+.chat-messages {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  background: #f7f9ff;
+  scrollbar-width: thin;
+  scrollbar-color: #aeb6ff #f7f9ff;
+}
+
+.chat-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background: #aeb6ff;
+  border-radius: 0;
+}
+
+/* Messages */
+.message {
+  display: flex;
+  align-items: flex-start;
+  margin: 14px 0;
+}
+
+.message img {
+  width: 24px;
+  height: 24px;
+  margin-right: 10px;
+}
+
+.bubble {
+  padding: 12px 16px;
+  border-radius: 0; /* 🔑 Sharp edges */
+  font-size: 0.95rem;
+  line-height: 1.5;
+  max-width: 75%;
+  word-wrap: break-word;
+  border: 1px solid #d4d9f0;
+  background: #eef2ff;
+}
+
+.message.user {
+  justify-content: flex-end;
+}
+
+.message.user .bubble {
+  background: #187bff;
+  color: white;
+  border: none;
+}
+
+.message.ai .bubble {
+  background: #eef2ff;
+  color: #1b1f3b;
+}
+
+.message.system {
+  justify-content: center;
+}
+
+.message.system .bubble {
+  background: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffeaa7;
+  font-style: italic;
+}
+
+/* Quick Replies */
+.quick-replies {
+  display: flex;
+  gap: 10px;
+  padding: 10px 18px;
+  background: #f0f3ff;
+  border-top: 1px solid #d6daf5;
+}
+
+.quick-replies button {
+  background: #e0e5ff;
+  border: 1px solid #c2c8ff;
+  border-radius: 0; /* Sharp edges */
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: #1b1f3b;
+  transition: background 0.2s ease, transform 0.1s ease;
+}
+
+.quick-replies button:hover {
+  background: #d3d9ff;
+  transform: scale(1.03);
+}
+
+/* Input Area */
+.chat-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border-top: 2px solid #d6daf5;
+  background: #ffffff;
+}
+
+.chat-input input {
+  flex: 1;
+  padding: 12px 14px;
+  border: 1px solid #cfd9e6;
+  outline: none;
+  font-size: 1rem;
+  border-radius: 0; /* Sharp */
+}
+
+.chat-input input:focus {
+  border-color: #187bff;
+  box-shadow: none;
+}
+
+/* + Button */
+.add-file-btn {
+  width: 40px;
+  height: 40px;
+  background: #187bff;
+  border: none;
+  border-radius: 0; /* Sharp button */
+  font-size: 1.4rem;
+  font-weight: bold;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+}
+
+.add-file-btn:hover {
+  background: #0f5ed3;
+}
+
+/* Send Button */
+.chat-input button.send-btn {
+  padding: 12px 20px;
+  background: #187bff;
+  border: none;
+  border-radius: 0;
+  color: white;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.chat-input button.send-btn:hover {
+  background: #0f5ed3;
+}
+
+    
+  </style>
+</head>
+<body>
+  <div class="chat-container">
+    
+    <!-- HEADER -->
+    <div class="chat-header">
+      <span style="font-size: 1.6rem; font-weight: 700;">⚖️ LegalAI</span>
+    </div>
+
+    <!-- CHAT MESSAGES -->
+    <div class="chat-messages" id="chatMessages"></div>
+
+    <!-- QUICK REPLIES -->
+    <div class="quick-replies">
+      <button onclick="sendQuick('What is a sale deed?')">What is a sale deed?</button>
+      <button onclick="sendQuick('Docs for registration')">Docs for registration</button>
+      <button onclick="sendQuick('Gift deed')">Gift deed</button>
+    </div>
+
+    <!-- INPUT AREA -->
+    <div class="chat-input">
+      <!-- SPACE RESERVED for IMAGE BUTTON -->
+      <button class="add-file-btn" title="Attach file">+</button>
+
+      <!-- MAIN TEXT INPUT -->
+      <input type="text" id="userInput" placeholder="Ask your legal question...">
+
+      <!-- VOICE BUTTON SPACE (icon can be added here later) -->
+      <button id="voiceBtn" class="voice-btn" title="Voice Input 🎙️">🎙️</button>
+
+      <!-- SEND BUTTON -->
+      <button class="send-btn" onclick="sendMessage()">Send</button>
+    </div>
+
+  </div>
+
+  <script src="chatbot.js"></script>
+</body>
+</html>

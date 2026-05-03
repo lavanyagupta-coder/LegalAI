@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clause Comparison Tool - LegalAI</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+  <style>
+    body {
+      font-family: "Poppins", sans-serif;
+      background: white;
+      margin: 0;
+      padding: 0;
+      color: #222;
+    }
+
+    header {
+      background-color: #004aad;
+      color: white;
+      text-align: center;
+      padding: 1rem;
+      font-size: 1.6rem;
+      letter-spacing: 1px;
+      font-weight: 600;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.5rem;
+      padding: 2rem;
+      max-width: 1000px;
+      margin: auto;
+    }
+
+    .upload-section {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      gap: 1.5rem;
+    }
+
+    .box {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    label {
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      font-size: 1.1rem;
+      color: #004aad;
+    }
+
+    textarea {
+      width: 100%;
+      box-sizing: border-box;
+      height: 350px;
+      padding: 1rem;
+      font-size: 1rem;
+      border: 1.5px solid #ccc;
+      border-radius: 10px;
+      outline: none;
+      resize: vertical;
+      transition: all 0.3s ease;
+      background: #fafafa;
+    }
+
+    textarea:focus {
+      border-color: #004aad;
+      background: #fff;
+      box-shadow: 0 0 6px rgba(0, 74, 173, 0.3);
+    }
+
+    input[type="file"] {
+      margin-bottom: 1rem;
+      padding: 0.3rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+
+    button {
+      background-color: #004aad;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 0.8rem 2rem;
+      cursor: pointer;
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-top: 1rem;
+      transition: background 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #00307a;
+    }
+
+    .result {
+      width: 100%;
+      background: #f9f9f9;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      padding: 1.5rem;
+      margin-top: 2rem;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+      text-align: left;
+    }
+
+    .result div {
+        padding: 8px;
+        border-radius: 6px;
+        margin-bottom: 8px;
+        line-height: 1.5;
+        font-family: monospace;
+    }
+
+    .added { background-color: #d4edda; color: #155724; }
+    .removed { background-color: #f8d7da; color: #721c24; }
+    .no-diff { text-align: center; color: #666; font-family: "Poppins", sans-serif;}
+  </style>
+</head>
+<body>
+
+  <header>⚖️ LegalAI - Clause Comparison Tool</header>
+
+  <div class="container">
+    <div class="upload-section">
+      <div class="box">
+        <label>📂 Old Contract (PDF or TXT)</label>
+        <input type="file" id="oldFile" accept=".pdf,.txt">
+        <textarea id="oldText" placeholder="Paste or upload old contract text..."></textarea>
+      </div>
+
+      <div class="box">
+        <label>📂 New Contract (PDF or TXT)</label>
+        <input type="file" id="newFile" accept=".pdf,.txt">
+        <textarea id="newText" placeholder="Paste or upload new contract text..."></textarea>
+      </div>
+    </div>
+
+    <button onclick="compareContracts()">Compare Clauses</button>
+
+    <div class="result" id="resultBox">
+      <p class="no-diff">Upload or paste contracts and click Compare to see the differences.</p>
+    </div>
+  </div>
+
+  <script>
+    // **FIX 1: Configure the PDF.js worker**
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js`;
+
+    // Handle file uploads (PDF + TXT)
+    document.getElementById("oldFile").addEventListener("change", e => readFile(e, "oldText"));
+    document.getElementById("newFile").addEventListener("change", e => readFile(e, "newText"));
+
+    async function readFile(event, targetId) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const targetTextArea = document.getElementById(targetId);
+      targetTextArea.value = "Processing file...";
+
+      if (file.type === "application/pdf") {
+        try {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            let text = "";
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const content = await page.getTextContent();
+                // Join text items with spaces, and add a newline after each page
+                text += content.items.map(item => item.str).join(" ") + "\n";
+            }
+            targetTextArea.value = text.trim();
+        } catch (error) {
+            console.error("Error parsing PDF:", error);
+            targetTextArea.value = "Error: Could not read PDF file.";
+            alert("Failed to process the PDF file. It might be corrupted or in an unsupported format.");
+        }
+      } else if (file.type === "text/plain") {
+        const reader = new FileReader();
+        reader.onload = e => targetTextArea.value = e.target.result;
+        reader.readAsText(file);
+      } else {
+        targetTextArea.value = "";
+        alert("Please upload a PDF or TXT file only.");
+      }
+    }
+
+    // **FIX 2: Improved comparison logic**
+    function compareContracts() {
+      // Get lines and filter out any empty ones
+      const oldLines = document.getElementById("oldText").value.trim().split("\n").filter(line => line.trim() !== '');
+      const newLines = document.getElementById("newText").value.trim().split("\n").filter(line => line.trim() !== '');
+      
+      const resultBox = document.getElementById("resultBox");
+      resultBox.innerHTML = "";
+
+      // Use Sets for efficient lookups
+      const oldSet = new Set(oldLines);
+      const newSet = new Set(newLines);
+      
+      let changes = [];
+      let hasChanges = false;
+
+      // Check for removed lines (in old but not in new)
+      oldLines.forEach(line => {
+        if (!newSet.has(line)) {
+          // Sanitize HTML to prevent rendering issues
+          const sanitizedLine = line.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          changes.push(`<div class="removed"><strong>- </strong>${sanitizedLine}</div>`);
+          hasChanges = true;
+        }
+      });
+
+      // Check for added lines (in new but not in old)
+      newLines.forEach(line => {
+        if (!oldSet.has(line)) {
+          const sanitizedLine = line.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          changes.push(`<div class="added"><strong>+ </strong>${sanitizedLine}</div>`);
+          hasChanges = true;
+        }
+      });
+
+      if (hasChanges) {
+          resultBox.innerHTML = changes.join("");
+      } else {
+          resultBox.innerHTML = `<p class='no-diff'>✅ No differences found. The documents are identical.</p>`;
+      }
+    }
+  </script>
+</body>
+</html>

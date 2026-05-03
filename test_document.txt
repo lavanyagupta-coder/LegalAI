@@ -1,0 +1,13 @@
+This is a sample legal document for testing purposes.
+
+PARTIES: This agreement is between Company A and Company B.
+
+TERMS: The parties agree to the following terms and conditions.
+
+1. Payment: Company A shall pay Company B $100,000 upon execution.
+
+2. Confidentiality: Both parties shall maintain confidentiality.
+
+3. Termination: Either party may terminate with 30 days notice.
+
+SIGNATURES: ____________________ ____________________

@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Legal Risk Analyzer</title>
+  <link rel="stylesheet" href="css/risk-analyzer.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="brand">⚖️ Legal Document Risk Analyzer</div>
+    <nav class="menu">
+      <!-- 👇 change href to your real front page -->
+      <a href="index.html">Dashboard</a>
+      <a href="fullsum.html">Reports</a>
+      <!-- 👇 link to sign-in page -->
+      <a href="signin.html">Account</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <h2>Identify & Mitigate<br>Your Legal Risks</h2>
+      <p class="muted">A comprehensive overview</p>
+
+      <!-- Upload Box -->
+      <div class="upload-box" onclick="document.getElementById('fileInput').click()">
+        <p>📂 Drag & Drop or Click to Upload</p>
+        <input id="fileInput" type="file" accept=".pdf,.doc,.docx" />
+      </div>
+
+      <div class="uploaded">
+        <h3>Uploaded Documents</h3>
+        <div id="docList"></div>
+      </div>
+    </aside>
+
+    <!-- Analysis Section -->
+    <section class="analysis">
+      <div class="risk-score">
+        <h3>Risk Analysis Results</h3>
+        <canvas id="riskGauge"></canvas>
+        <div class="score-text">
+          RISK SCORE: <strong id="riskScore">0%</strong>
+          <span id="riskAlert" class="alert">No Risks Yet</span>
+        </div>
+      </div>
+
+      <!-- Key Risks -->
+      <div class="card">
+        <h3>Flagged Risks</h3>
+        <ol id="riskList">
+          <li>No risks detected yet. Upload a document.</li>
+        </ol>
+      </div>
+
+      <!-- Risk Distribution -->
+      <div class="card">
+        <h3>Risk Distribution by Category</h3>
+        <canvas id="riskChart"></canvas>
+      </div>
+
+      <div class="actions">
+        <!-- 👇 summary page link -->
+        <button class="btn primary" onclick="window.location.href='fullsum.html'">Generate Full Report (PDF)</button>
+        <button class="btn">Schedule Consultation</button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const fileInput = document.getElementById("fileInput");
+    const docList = document.getElementById("docList");
+    const riskScoreEl = document.getElementById("riskScore");
+    const riskAlertEl = document.getElementById("riskAlert");
+    const riskList = document.getElementById("riskList");
+
+    let gaugeChart, barChart;
+
+    function loadAnalysis(analysis, fileName) {
+      if (!analysis) return;
+
+      docList.innerHTML = `
+        <div class="doc-item">
+          <span>${fileName || analysis.filename || "Uploaded document"}</span>
+          <button onclick="analyzeDoc()">Review Risks</button>
+        </div>
+      `;
+
+      window.currentRiskAnalysis = analysis;
+      analyzeDoc();
+    }
+
+    // === File Upload ===
+    fileInput.addEventListener("change", async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("http://127.0.0.1:8016/analyze", {
+        method: "POST",
+        body: formData
+      });
+      const analysis = await response.json();
+      analysis.uploadedAt = new Date().toISOString();
+      sessionStorage.setItem("analysisResult", JSON.stringify(analysis));
+      sessionStorage.setItem("analyzedFileName", file.name);
+      loadAnalysis(analysis, file.name);
+    });
+
+    function analyzeDoc() {
+      const analysis = window.currentRiskAnalysis || JSON.parse(sessionStorage.getItem("analysisResult") || "null");
+      const risks = analysis?.risks || [];
+      const score = analysis?.scores?.risk_score || 0;
+
+      riskScoreEl.textContent = score + "%";
+      riskAlertEl.textContent = score >= 70 ? "HIGH RISK DETECTED" : "LOW RISK";
+      riskAlertEl.style.color = score >= 70 ? "#dc2626" : "#059669";
+
+      riskList.innerHTML = "";
+      if (!risks.length) {
+        const li = document.createElement("li");
+        li.textContent = analysis?.message || "No risks detected.";
+        riskList.appendChild(li);
+      } else {
+        risks.forEach(r => {
+          const li = document.createElement("li");
+          li.textContent = `${r.severity} Risk: ${r.title} - ${r.description}`;
+          riskList.appendChild(li);
+        });
+      }
+
+      updateCharts(score, risks);
+    }
+
+    function updateCharts(score, risks) {
+      const ctxGauge = document.getElementById('riskGauge').getContext('2d');
+      if (gaugeChart) gaugeChart.destroy();
+      gaugeChart = new Chart(ctxGauge, {
+        type: 'doughnut',
+        data: {
+          labels: ['Risk', 'Safe'],
+          datasets: [{
+            data: [score, 100 - score],
+            backgroundColor: ['#dc2626', '#e5e7eb'],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          cutout: '70%',
+          plugins: { legend: { display: false } }
+        }
+      });
+
+      const ctx = document.getElementById('riskChart').getContext('2d');
+      if (barChart) barChart.destroy();
+      const high = risks.filter(r => r.severity === "High").length;
+      const medium = risks.filter(r => r.severity === "Medium").length;
+      const low = risks.filter(r => r.severity === "Low").length;
+      const categoryScores = risks.reduce((acc, risk) => {
+        const key = risk.category || "General";
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      }, {});
+      const labels = Object.keys(categoryScores).length ? Object.keys(categoryScores) : ["General"];
+      const values = labels.map(label => categoryScores[label] || 0);
+      barChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { label: 'High Risk', data: labels.map(() => high), backgroundColor: '#dc2626' },
+            { label: 'Medium Risk', data: labels.map(() => medium), backgroundColor: '#f59e0b' },
+            { label: 'Low Risk', data: labels.map(() => low), backgroundColor: '#059669' },
+            { label: 'Items by Category', data: values, backgroundColor: '#2563eb' }
+          ]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { position: 'bottom' } }
+        }
+      });
+    }
+
+    const savedAnalysis = sessionStorage.getItem("analysisResult");
+    const savedName = sessionStorage.getItem("analyzedFileName");
+    if (savedAnalysis) {
+      loadAnalysis(JSON.parse(savedAnalysis), savedName);
+    }
+  </script>
+</body>
+</html>

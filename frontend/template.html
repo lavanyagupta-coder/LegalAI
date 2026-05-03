@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>LegalAI — Document Editor</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <style>
+    :root {
+      --blue: #1f66b3;
+      --navy: #123663;
+      --card: #ffffff;
+      --text: #233043;
+      --accent: #0b5fb8;
+      --radius: 10px;
+      --shadow: 0 6px 20px rgba(16, 30, 50, 0.08);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    * { box-sizing: border-box }
+    body {
+      margin: 0;
+      background: #f7f9fc;
+      color: var(--text);
+    }
+
+    /* Top bar */
+    .topbar {
+      height: 60px;
+      background: var(--blue);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 40px;
+    }
+    .topbar .brand { font-weight: 700; font-size: 18px; }
+    .navlinks a { color: #fff; text-decoration: none; margin-left: 20px; }
+    .navlinks a:hover { text-decoration: underline; }
+
+    /* Layout */
+    .container {
+      padding: 24px 40px;
+    }
+
+    /* Templates List */
+    .templates-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .template-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      border: 1px solid #e9eef3;
+      border-left: 5px solid transparent;
+      transition: background-color 0.3s, border-left-color 0.3s, transform 0.2s;
+    }
+
+    .template-card:hover {
+      border-left-color: var(--blue);
+      background-color: #fff;
+      transform: translateX(5px);
+      box-shadow: var(--shadow);
+    }
+    .tmpl-icon { font-size: 2.5rem; line-height: 1; }
+    .tmpl-content { flex-grow: 1; }
+    .tmpl-title { font-weight: 600; font-size: 18px; margin-bottom: 4px; }
+    .tmpl-desc { font-size: 15px; color: #555; }
+    .tmpl-arrow { font-size: 2rem; color: #cccccc; opacity: 0; transition: opacity 0.3s; }
+    .template-card:hover .tmpl-arrow { opacity: 1; }
+    
+    /* --- CSS FOR EDITOR --- */
+    #agreement-editor-stage.hidden {
+        display: none;
+    }
+    .editor-grid {
+        display: grid;
+        grid-template-columns: 1fr 2fr;
+        gap: 30px;
+        align-items: flex-start;
+    }
+    @media (max-width: 900px) {
+        .editor-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    .editor-panel {
+        background: var(--card);
+        border-radius: var(--radius);
+        padding: 24px;
+        box-shadow: var(--shadow);
+    }
+    .form-panel {
+        position: sticky;
+        top: 20px;
+    }
+    .form-panel h2, .preview-header h2 {
+        margin-top: 0;
+        font-size: 1.25rem;
+        color: var(--navy);
+    }
+    .form-field { margin-bottom: 1rem; }
+    .form-field label { display: block; font-size: 0.9rem; font-weight: 600; margin-bottom: 6px; }
+    .form-field input, .form-field textarea, .form-field select {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        font-size: 1rem;
+        font-family: inherit;
+    }
+    .preview-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid #eee;
+    }
+    .download-btn {
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        padding: 10px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 600;
+    }
+    .download-btn:hover { background: var(--navy); }
+    
+    /* -- Formal Document Preview Styles -- */
+    #agreement-output {
+        border: 1px solid #e9eef3;
+        padding: 2.5rem;
+        min-height: 500px;
+        border-radius: 8px;
+        background: #fff;
+        font-family: 'Times New Roman', Times, serif;
+        font-size: 12pt;
+        color: #000;
+    }
+    #agreement-output p { margin-bottom: 1rem; line-height: 1.5; text-align: justify; }
+    #agreement-output ul { padding-left: 40px; margin-bottom: 1rem; }
+    #agreement-output li { margin-bottom: 0.5rem; }
+    #agreement-output h1 { font-size: 14pt; font-weight: bold; text-align: center; margin-bottom: 1.5rem; border-bottom: 1px solid #000; padding-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 1px;}
+    #agreement-output .nda-h1 { border-top: 1px solid #000; }
+    #agreement-output h2 { font-size: 12pt; font-weight: bold; margin-top: 1.5rem; margin-bottom: 0.75rem; }
+    .doc-header, .doc-footer { display: flex; justify-content: space-between; font-size: 10pt; margin-bottom: 1.5rem;}
+    .fill-in { border-bottom: 1px solid #000; padding: 0 0.25em; font-weight: bold; }
+    .checkbox { font-family: monospace; }
+    
+    #loading-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background-color: rgba(0, 0, 0, 0.6);
+      display: none; justify-content: center; align-items: center; z-index: 1000;
+    }
+    .spinner {
+      border: 4px solid rgba(255, 255, 255, 0.3); border-top: 4px solid #fff;
+      border-radius: 50%; width: 40px; height: 40px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">⚖️ LegalAIAssistant</div>
+    <nav class="navlinks">
+      <a href="#" onclick="showSelectionStage()">Home</a>
+      <a href="#" onclick="showSelectionStage()">Templates</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    
+    <div id="template-selection-stage">
+        <h1>Templates</h1>
+        <div class="templates-list" id="templatesListContainer"></div>
+    </div>
+    
+    <div id="agreement-editor-stage" class="hidden">
+        <div class="editor-grid">
+            <div class="editor-panel form-panel">
+                <h2 id="form-title">Details</h2>
+                <div id="form-fields-container"></div>
+            </div>
+            <div class="editor-panel preview-panel">
+                <div class="preview-header">
+                    <h2 id="preview-title">Preview</h2>
+                    <button onclick="downloadPDF()" class="download-btn">Download PDF</button>
+                </div>
+                <div id="agreement-output" contenteditable="true"></div>
+            </div>
+        </div>
+    </div>
+  </main>
+
+  <div id="loading-overlay"><div class="spinner"></div></div>
+
+  <script>
+    const listContainer = document.getElementById("templatesListContainer");
+    const selectionStage = document.getElementById('template-selection-stage');
+    const editorStage = document.getElementById('agreement-editor-stage');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    let currentTemplateType = null;
+    
+    const formatDate = (dateString) => {
+        if (!dateString) return { day: '___', month: '______', year: '____' };
+        const date = new Date(dateString + 'T00:00:00');
+        return {
+            day: date.getDate(),
+            month: date.toLocaleString('en-US', { month: 'long' }),
+            year: date.getFullYear()
+        };
+    };
+
+    const AGREEMENT_TEMPLATE_LEASE = (data) => {
+        const agreementDate = formatDate(data.agreementDate);
+        const startDate = formatDate(data.leaseStartDate);
+        const endDate = formatDate(data.leaseEndDate);
+
+        return `
+        <div class="doc-header">
+            <span>State of <span class="fill-in">${data.stateOfGoverningLaw || ''}</span></span>
+            <span>Rev. 1343BEC</span>
+        </div>
+        <h1 class="lease-h1">Lease Agreement</h1>
+        <p><strong>This Lease Agreement</strong> (this "Agreement") is made this <span class="fill-in">${agreementDate.day}</span> day of <span class="fill-in">${agreementDate.month}</span>, <span class="fill-in">${agreementDate.year}</span> by and between:</p>
+        <p style="padding-left: 20px;"><strong>Landlord:</strong> <span class="fill-in">${data.landlordName || ''}</span> ("Landlord") AND</p>
+        <p style="padding-left: 20px;"><strong>Tenant(s):</strong> <span class="fill-in">${data.tenantName || ''}</span> ("Tenant").</p>
+        <p>In the event there is more than one Tenant, each reference to “Tenant” shall apply to each of them, jointly and severally. Each Tenant is jointly and severally liable to Landlord for payment of rent and performance in accordance with all other terms of this Agreement. Each Landlord and Tenant may be referred to individually as a "Party" and collectively as the "Parties."</p>
+        <h2>1. PREMISES</h2>
+        <p>The Premises leased is a/an <span class="checkbox">${data.propertyType === 'Apartment' ? '☒' : '☐'} apartment</span> <span class="checkbox">${data.propertyType === 'House' ? '☒' : '☐'} house</span> <span class="checkbox">${data.propertyType === 'Condominium' ? '☒' : '☐'} condominium</span> <span class="checkbox">${data.propertyType === 'Room' ? '☒' : '☐'} room</span> <span class="checkbox">${data.propertyType === 'Townhouse' ? '☒' : '☐'} townhouse</span> <span class="checkbox">${data.propertyType === 'Duplex' ? '☒' : '☐'} duplex</span> <span class="checkbox">${data.propertyType === 'Semi-detached House' ? '☒' : '☐'} semi-detached house</span> <span class="checkbox">${data.propertyType === 'Other' ? '☒' : '☐'} other: <span class="fill-in">${data.propertyType === 'Other' ? data.otherPropertyType : ''}</span> with:</p>
+        <ul style="list-style-type: none; padding-left: 40px;">
+            <li>(a) <span class="fill-in">${data.numBedrooms || ''}</span> bedroom(s)</li>
+            <li>(b) <span class="fill-in">${data.numBathrooms || ''}</span> bathroom(s)</li>
+            <li>(c) <span class="fill-in">${data.numParking || ''}</span> parking space(s) <span class="checkbox">${data.parkingIncluded === 'No' ? '☒' : '☐'}</span> Parking is not included with the Premises</li>
+        </ul>
+        <p>located at <span class="fill-in">${data.streetAddress || ''}</span>, City of <span class="fill-in">${data.city || ''}</span>, State of <span class="fill-in">${data.state || ''}</span>, <span class="fill-in">${data.zip || '_'}</span> (the "Premises").</p>
+        <p><strong>Storage:</strong> The Premises includes the following storage space: <span class="fill-in">${data.storageDesc || ''}</span></p>
+        <p><strong>Furnishings (check one):</strong></p>
+        <ul style="list-style-type: none; padding-left: 20px;">
+            <li><span class="checkbox">${data.furnishingStatus === 'Furnished' ? '☒' : '☐'}</span> The Premises is furnished.</li>
+            <li><span class="checkbox">${data.furnishingStatus === 'Not Furnished' ? '☒' : '☐'}</span> The Premises is NOT furnished.</li>
+        </ul>
+        <p>The Premises includes the following furnishings: <span class="fill-in">${data.furnishingsList || ''}</span></p>
+        <p><strong>Additional description of the premises:</strong> <span class="fill-in">${data.additionalDesc || ''}</span></p>
+        <h2>2. AGREEMENT TO LEASE</h2>
+        <p>Landlord agrees to lease to Tenant and Tenant agrees to lease from Landlord, according to the terms and conditions set forth herein, the Premises.</p>
+        <h2>3. TERM</h2>
+        <p>This Agreement shall be considered a: (check one)</p>
+        <ul style="list-style-type: none; padding-left: 20px;">
+            <li><span class="checkbox">${data.termType === 'Fixed Lease' ? '☒' : '☐'}</span> <strong>Fixed Lease.</strong> This Agreement will be for a term beginning on <span class="fill-in">${startDate.month} ${startDate.day}, ${startDate.year}</span> and ending on <span class="fill-in">${endDate.month} ${endDate.day}, ${endDate.year}</span> (the "Term").</li>
+            <li><span class="checkbox">${data.termType === 'Month-to-Month' ? '☒' : '☐'}</span> <strong>A month-to-month holdover tenancy will be created.</strong> If Landlord accepts a rent payment from Tenant, other than past due rent or additional rent, after the term expires, both parties understand that a month-to-month holdover tenancy will be created at the agreed upon monthly rent, unless proper notice has been served as required by applicable laws. If either Tenant or Landlord wishes to end the month-to-month tenancy, such Party must provide at least thirty (30) days' written notice before the desired termination date.</li>
+        </ul>
+        <div class="doc-footer" style="margin-top: 5rem;"><span>Lease Agreement (Rev. 1343BEC)</span></div>`;
+    };
+
+    const AGREEMENT_TEMPLATE_NDA = (data) => {
+        const agreementDate = formatDate(data.agreementDate);
+        return `
+        <h1 class="nda-h1">Non-Disclosure Agreement</h1>
+        <p>This Non-Disclosure Agreement ("Agreement") is entered into as of <span class="fill-in">${agreementDate.month} ${agreementDate.day}, ${agreementDate.year}</span></p>
+        <p><strong>BY AND BETWEEN:</strong> <span class="fill-in">${data.disclosingParty || ''}</span>, located at <span class="fill-in">${data.disclosingPartyLocation || ''}</span></p>
+        <p><strong>AND:</strong> <span class="fill-in">${data.receivingParty || ''}</span>, located at <span class="fill-in">${data.receivingPartyLocation || ''}</span></p>
+        <h2>1. Definition of Confidential Information</h2>
+        <p>For purposes of this Agreement, "Confidential Information" means all non-public, proprietary, or sensitive information disclosed by the Disclosing Party to the Receiving Party, whether in written, oral, electronic, or other form, including but not limited to business strategies, trade secrets, financial data, customer lists, designs, and technical data for the purpose of <span class="fill-in">${data.purpose || ''}.</span></p>
+        <h2>2. Obligations of the Receiving Party</h2>
+        <p>The Receiving Party agrees to:</p>
+        <ul style="list-style-type: lower-alpha;">
+            <li>Use the Confidential Information solely for the purpose described above.</li>
+            <li>Keep the Confidential Information strictly confidential and not disclose it to any third party without prior written consent of the Disclosing Party.</li>
+            <li>Protect the Confidential Information with the same degree of care as the Receiving Party uses to protect its own confidential information, but no less than a reasonable standard of care.</li>
+        </ul>
+        <h2>3. Exclusions from Confidential Information</h2>
+        <p>Confidential Information does not include information that:</p>
+        <ul style="list-style-type: lower-alpha;">
+            <li>Is or becomes publicly available through no fault of the Receiving Party.</li>
+            <li>Was already known to the Receiving Party before disclosure by the Disclosing Party.</li>
+            <li>Is independently developed by the Receiving Party without use of or reference to the Confidential Information.</li>
+            <li>Is disclosed under legal obligation or by court order, provided that the Receiving Party gives prompt notice to the Disclosing Party to allow for protective measures.</li>
+        </ul>
+        <h2>4. Term and Termination</h2>
+        <p>The obligations of confidentiality shall remain in effect for a period of three (3) years from the date of disclosure or until the Confidential Information no longer qualifies as confidential, whichever occurs first.</p>
+        <h2>5. Return or Destruction of Information</h2>
+        <p>Upon the Disclosing Party's request, the Receiving Party shall promptly return or destroy all Confidential Information and certify the same in writing.</p>
+    `;
+    }
+    const AGREEMENT_TEMPLATE_SERVICE = (data) => {
+        const agreementDate = formatDate(data.agreementDate);
+        return `
+        <h1>Service Agreement</h1>
+        <p>This SERVICE AGREEMENT ("Agreement") is effective <span class="fill-in">${agreementDate.month} ${agreementDate.day}, ${agreementDate.year}</span>,</p>
+        <p><strong>BETWEEN:</strong></p>
+        <p style="padding-left: 20px;"><span class="fill-in">${data.contractorName || '[COMPANY NAME]'}</span> (the "Contractor"), a company organized and existing under the laws of <span class="fill-in">${data.contractorState || '[STATE/PROVINCE]'}</span>, with its head office located at:</p>
+        <p style="padding-left: 40px;"><span class="fill-in">${data.contractorAddress || '[COMPLETE ADDRESS]'}</span></p>
+        <p><strong>AND:</strong></p>
+        <p style="padding-left: 20px;"><span class="fill-in">${data.customerName || '[COMPANY NAME]'}</span> (the "Customer"), a company organized and existing under the laws of <span class="fill-in">${data.customerState || '[STATE/PROVINCE]'}</span>, with its head office located at:</p>
+        <p style="padding-left: 40px;"><span class="fill-in">${data.customerAddress || '[COMPLETE ADDRESS]'}</span></p>
+        <p>(The Contractor and the Customer shall be individually referred to as a "Party" and collectively referred to as the "Parties", as the context may require).</p>
+        <p><strong>WHEREAS</strong></p>
+        <ul style="list-style-type: upper-alpha; padding-left: 20px;">
+            <li>Contractor has experience and expertise in <span class="fill-in">${data.contractorExperience || '[DESCRIBE EXPERIENCE AND SERVICE]'}</span>.</li>
+            <li>Customer desires to have Contractor provide services for them.</li>
+            <li>Contractor desires to provide services to Customer on the terms and conditions set forth herein (the "Services").</li>
+        </ul>
+        <p><strong>NOW THEREFORE</strong>, in consideration of the above recitals, the representations, warranties, and agreements contained in this Agreement and for other good and valuable consideration, the receipt and adequacy of which are now acknowledged, the Parties agree as follows:</p>
+        <h2>1. SERVICES PROVIDED</h2>
+        <p>Beginning on upon agreement to this contract, ${data.contractorName || '[CONTRACTOR]'} will provide to ${data.customerName || '[CUSTOMER]'} the following service (collectively, the "Services"):</p>
+        <p>Description of the project: <span class="fill-in">${data.projectDescription || '[DESCRIBE THE SERVICE REQUIRED]'}</span>.</p>
+        <h2>2. SCOPE OF WORK</h2>
+        <p>Contractor agrees to provide Services pursuant to the Scope of Work set forth in Exhibit A attached hereto (the "Scope of Work").</p>
+        <h2>3. TERM</h2>
+        <p>Unless both parties mutually agree on an extension, this contract will automatically terminate on <span class="fill-in">${data.termTerminationCondition || '[SPECIFY]'}</span>.</p>
+        <div class="doc-footer" style="margin-top: 5rem;">
+            <span>Service Agreement</span>
+            <span>Page 1 of 6</span>
+        </div>
+    `;
+    }
+    const AGREEMENT_TEMPLATE_EMPLOYMENT = (data) => {
+        const agreementDate = formatDate(data.agreementDate);
+        const startDate = formatDate(data.termStartDate);
+        const endDate = formatDate(data.termEndDate);
+        const responsibilitiesList = data.responsibilities ? data.responsibilities.split('\n').map(item => `<li>${item}</li>`).join('') : '';
+
+        return `
+        <div class="doc-header">
+            <span>State of <span class="fill-in">${data.stateOfGoverningLaw || ''}</span></span>
+        </div>
+        <h1>Employment Agreement</h1>
+        <p>This Employment Agreement (the "Agreement") is made as of this <span class="fill-in">${agreementDate.day}</span> day of <span class="fill-in">${agreementDate.month}</span>, <span class="fill-in">${agreementDate.year}</span> (the "Effective Date") by and between <span class="fill-in">${data.employerName || ''}</span> ("Employer"), and <span class="fill-in">${data.employeeName || ''}</span> ("Employee"), (each, a "Party" and collectively, the "Parties"). The Parties agree and covenant to be bound by the terms set forth in this Agreement as follows:</p>
+        <h2>1. Employment.</h2>
+        <p>Employer shall employ Employee as a <span class="fill-in">${data.jobTitle || ''}</span> on a <span class="checkbox">${data.employmentType === 'Full-time' ? '☒' : '☐'}</span> full time <span class="checkbox">${data.employmentType === 'Part-time' ? '☒' : '☐'}</span> part time basis under this Agreement. In this capacity, Employee shall have the following duties and undertake the following responsibilities:</p>
+        <ul style="list-style-type: disc;">${responsibilitiesList || '<li><span class="fill-in"></span></li>'}</ul>
+        <p>Employee shall perform such other duties as are customarily performed by other persons in similar positions, including other duties as may arise from time to time and as may be assigned.</p>
+        <h2>2. Performance of Duties.</h2>
+        <p>Employee shall perform assigned duties and responsibilities in a professional manner, in good faith, and to the best of Employee's skills, abilities, talents and experience.</p>
+        <h2>3. Term. (Check one)</h2>
+        <ul style="list-style-type: none; padding-left: 20px;">
+            <li><span class="checkbox">${data.termType === 'Fixed Term' ? '☒' : '☐'}</span> <strong>Fixed Term.</strong> Employee's employment under this Agreement shall begin on <span class="fill-in">${startDate.month} ${startDate.day}, ${startDate.year}</span> and will terminate on <span class="fill-in">${endDate.month} ${endDate.day}, ${endDate.year}</span>.</li>
+            <li><span class="checkbox">${data.termType === 'At Will' ? '☒' : '☐'}</span> <strong>At Will.</strong> Employee's employment under this Agreement shall begin on <span class="fill-in">${startDate.month} ${startDate.day}, ${startDate.year}</span> and be for an unspecified term on at "at will" basis.</li>
+        </ul>
+        <p><strong>Probation Period (Check one)</strong></p>
+        <ul style="list-style-type: none; padding-left: 20px;">
+              <li><span class="checkbox">${data.probationStatus === 'Yes' ? '☒' : '☐'}</span> Employee's probation period shall be <span class="fill-in">${data.probationDuration || ''}</span> <span class="fill-in">${data.probationUnit || 'month(s)'}</span>, starting from the first day of Employee's employment. In the event that Employee fails to pass the probation period, Employer may terminate this Agreement immediately by giving notice to Employee.</li>
+              <li><span class="checkbox">${data.probationStatus === 'No' ? '☒' : '☐'}</span> There is NOT a probation period for Employee.</li>
+        </ul>
+        <h2>4. Compensation.</h2>
+        <p><strong>A. Base Salary.</strong> As compensation for the services provided by Employee under this Agreement, Employer will pay Employee $<span class="fill-in">${data.baseSalary || ''}</span> <span class="checkbox">${data.salaryFrequency === 'per hour' ? '☒' : '☐'}</span> per hour <span class="checkbox">${data.salaryFrequency === 'per week' ? '☒' : '☐'}</span> per week <span class="checkbox">${data.salaryFrequency === 'per month' ? '☒' : '☐'}</span> per month <span class="checkbox">${data.salaryFrequency === 'per year' ? '☒' : '☐'}</span> per year. The amount will be paid to Employee: (Check one)</p>
+        <ul style="list-style-type: none; padding-left: 20px;">
+            <li><span class="checkbox">${data.paymentSchedule === 'weekly' ? '☒' : '☐'}</span> Once a week on the <span class="fill-in">${data.paymentDay || ''}</span> day of each week.</li>
+        </ul>
+        `;
+    }
+    
+    const AGREEMENT_TEMPLATE_FREELANCE = (data) => {
+        const agreementDate = formatDate(data.agreementDate);
+        return `
+        <div class="doc-header">
+            <span>State of <span class="fill-in">${data.stateOfGoverningLaw || ''}</span></span>
+            <span>Rev. 133EE8E</span>
+        </div>
+        <h1>Freelance Contract</h1>
+        <p>This Freelance Contract (this "Agreement") is made as of this <span class="fill-in">${agreementDate.day}</span> day of <span class="fill-in">${agreementDate.month}</span>, <span class="fill-in">${agreementDate.year}</span>, (the "Effective Date") by and between <span class="fill-in">${data.clientName || ''}</span> located at <span class="fill-in">${data.clientLocation || ''}</span> ("Client") and <span class="fill-in">${data.contractorName || ''}</span> located at <span class="fill-in">${data.contractorLocation || ''}</span> ("Independent Contractor"). Client and Independent Contractor may each be referred to in this Agreement as a "Party" and collectively as the "Parties."</p>
+        
+        <h2>1. Services.</h2>
+        <p>Independent Contractor shall provide the following services to Client (the "Services"): <span class="fill-in">${data.servicesDescription || ''}</span>. In addition, Independent Contractor shall perform such other duties and tasks, or changes to the Services, as may be agreed upon by the Parties.</p>
+
+        <h2>2. Compensation.</h2>
+        <p>In consideration for Independent Contractor's performance of the Services, Client shall pay Independent Contractor: (Check one)</p>
+        
+        <ul style="list-style-type: none; padding-left: 20px;">
+            <li><span class="checkbox">${data.compensationType === 'Fixed Wage' ? '☒' : '☐'}</span> <strong>A Fixed Wage.</strong> Client shall pay Independent Contractor $<span class="fill-in">${data.wageAmount || ''}</span> 
+                <span class="checkbox">${data.wageFrequency === 'per hour' ? '☒' : '☐'}</span> per hour 
+                <span class="checkbox">${data.wageFrequency === 'per week' ? '☒' : '☐'}</span> per week 
+                <span class="checkbox">${data.wageFrequency === 'per month' ? '☒' : '☐'}</span> per month 
+                <span class="checkbox">${data.wageFrequency === 'per year' ? '☒' : '☐'}</span> per year. 
+            Independent Contractor will be paid: (Check one)</li>
+        </ul>
+        <ul style="list-style-type: none; padding-left: 60px;">
+            <li><span class="checkbox">${data.compensationType === 'Fixed Wage' && data.wagePaymentSchedule === 'Weekly' ? '☒' : '☐'}</span> Weekly. Independent Contractor will be paid on <span class="fill-in">${data.weeklyPaymentDay || ''}</span> of every week.</li>
+            <li><span class="checkbox">${data.compensationType === 'Fixed Wage' && data.wagePaymentSchedule === 'Monthly' ? '☒' : '☐'}</span> Monthly. Independent Contractor will be paid on the <span class="fill-in">${data.monthlyPaymentDay || ''}</span> of every month.</li>
+            <li><span class="checkbox">${data.compensationType === 'Fixed Wage' && data.wagePaymentSchedule === 'Upon Invoice' ? '☒' : '☐'}</span> After Independent Contractor sends Client an invoice. Independent Contractor will be paid within <span class="fill-in">${data.invoiceDueDays || ''}</span> days after receiving Independent Contractor's invoice.</li>
+        </ul>
+
+        <ul style="list-style-type: none; padding-left: 20px; margin-top: 1rem;">
+            <li><span class="checkbox">${data.compensationType === 'Set Fee' ? '☒' : '☐'}</span> <strong>A Set Fee.</strong> Client shall pay Independent Contractor $<span class="fill-in">${data.setFeeAmount || ''}</span>. (Check one)</li>
+        </ul>
+        <ul style="list-style-type: none; padding-left: 60px;">
+            <li><span class="checkbox">${data.compensationType === 'Set Fee' && data.setFeePaymentSchedule === 'After Completion' ? '☒' : '☐'}</span> After Independent Contractor completes the Services.</li>
+            <li><span class="checkbox">${data.compensationType === 'Set Fee' && data.setFeePaymentSchedule === 'Upon Invoice' ? '☒' : '☐'}</span> After Independent Contractor sends Client an invoice. Client shall pay Independent Contractor within <span class="fill-in">${data.invoiceDueDays || ''}</span> days after receiving Independent Contractor's invoice.</li>
+        </ul>
+        
+        <div class="doc-footer" style="margin-top: 5rem;"><span>Freelance Contract (Rev. 133EE8E)</span></div>
+        `;
+    }
+
+    // --- TEMPLATE DATA & LOGIC ---
+    const TEMPLATES = {
+        'lease': {
+            title: "Residential Lease",
+            templateFn: AGREEMENT_TEMPLATE_LEASE,
+            fields: [
+                { id: 'landlordName', label: 'Landlord Name', defaultValue: 'John Smith' },
+                { id: 'tenantName', label: 'Tenant Name(s)', defaultValue: 'Jane Doe' },
+                { id: 'agreementDate', label: 'Agreement Date', type: 'date', defaultValue: '2025-10-04' },
+                { id: 'stateOfGoverningLaw', label: 'State of Governing Law', defaultValue: 'California' },
+                { id: 'propertyType', label: 'Property Type', type: 'select', options: ['Apartment', 'House', 'Condominium', 'Room', 'Townhouse', 'Duplex', 'Semi-detached House', 'Other'], defaultValue: 'Apartment' },
+                { id: 'otherPropertyType', label: 'If "Other", specify type', defaultValue: '' },
+                { id: 'streetAddress', label: 'Street Address', defaultValue: '123 Main St' },
+                { id: 'city', label: 'City', defaultValue: 'Anytown' },
+                { id: 'state', label: 'State (Abbr.)', defaultValue: 'CA' },
+                { id: 'zip', label: 'ZIP Code', defaultValue: '12345' },
+                { id: 'numBedrooms', label: 'Number of Bedrooms', type: 'number', defaultValue: '2' },
+                { id: 'numBathrooms', label: 'Number of Bathrooms', type: 'number', defaultValue: '1' },
+                { id: 'numParking', label: 'Parking Spaces', type: 'number', defaultValue: '1' },
+                { id: 'parkingIncluded', label: 'Parking Included?', type: 'select', options: ['Yes', 'No'], defaultValue: 'Yes' },
+                { id: 'storageDesc', label: 'Storage Description', type: 'textarea', defaultValue: 'One designated locker in the basement.' },
+                { id: 'furnishingStatus', label: 'Furnishing Status', type: 'select', options: ['Not Furnished', 'Furnished'], defaultValue: 'Not Furnished' },
+                { id: 'furnishingsList', label: 'List of Furnishings', type: 'textarea', defaultValue: 'N/A' },
+                { id: 'additionalDesc', label: 'Additional Description of Premises', type: 'textarea', defaultValue: 'Use of shared backyard is permitted.' },
+                { id: 'termType', label: 'Term Type', type: 'select', options: ['Fixed Lease', 'Month-to-Month'], defaultValue: 'Fixed Lease' },
+                { id: 'leaseStartDate', label: 'Lease Start Date', type: 'date', defaultValue: '2025-11-01' },
+                { id: 'leaseEndDate', label: 'Lease End Date', type: 'date', defaultValue: '2026-10-31' },
+            ],
+        },
+        'nda': {
+            title: "Non-Disclosure Agreement",
+            templateFn: AGREEMENT_TEMPLATE_NDA,
+            fields: [
+                { id: 'agreementDate', label: 'Agreement Date', type: 'date', defaultValue: '2025-10-04' },
+                { id: 'disclosingParty', label: 'Disclosing Party', defaultValue: 'Innovate Corp' },
+                { id: 'disclosingPartyLocation', label: 'Disclosing Party Location', defaultValue: '123 Tech Ave, Silicon Valley, CA' },
+                { id: 'receivingParty', label: 'Receiving Party', defaultValue: 'Partner LLC' },
+                { id: 'receivingPartyLocation', label: 'Receiving Party Location', defaultValue: '456 Business Blvd, Metropolis, NY' },
+                { id: 'purpose', label: 'Purpose of Disclosure', type: 'textarea', defaultValue: 'exploring a potential joint venture.' },
+            ],
+        },
+        'service': {
+            title: "Service Agreement",
+            templateFn: AGREEMENT_TEMPLATE_SERVICE,
+            fields: [
+                { id: 'agreementDate', label: 'Effective Date', type: 'date', defaultValue: '2025-10-04' },
+                { id: 'contractorName', label: 'Contractor Name', defaultValue: 'Creative Solutions Inc.' },
+                { id: 'contractorState', label: 'Contractor State/Province', defaultValue: 'California' },
+                { id: 'contractorAddress', label: 'Contractor Address', defaultValue: '789 Design Lane, Creativia, CA' },
+                { id: 'customerName', label: 'Customer Name', defaultValue: 'Global Tech Inc.' },
+                { id: 'customerState', label: 'Customer State/Province', defaultValue: 'New York' },
+                { id: 'customerAddress', label: 'Customer Address', defaultValue: '101 Innovation Dr, Tech City, NY' },
+                { id: 'contractorExperience', label: 'Contractor Experience Description', type: 'textarea', defaultValue: 'providing high-quality web design and development services' },
+                { id: 'projectDescription', label: 'Project Description', type: 'textarea', defaultValue: 'A full redesign and launch of the corporate website.' },
+                { id: 'termTerminationCondition', label: 'Termination Condition', defaultValue: 'project completion' },
+            ],
+        },
+        'employment': {
+            title: "Employment Contract",
+            templateFn: AGREEMENT_TEMPLATE_EMPLOYMENT,
+            fields: [
+                { id: 'stateOfGoverningLaw', label: 'State of Governing Law', defaultValue: 'California' },
+                { id: 'agreementDate', label: 'Agreement Date', type: 'date', defaultValue: '2025-10-04' },
+                { id: 'employerName', label: 'Employer Name', defaultValue: 'Future Systems Ltd.' },
+                { id: 'employeeName', label: 'Employee Name', defaultValue: 'Michael Johnson' },
+                { id: 'jobTitle', label: 'Job Title', defaultValue: 'Software Engineer' },
+                { id: 'employmentType', label: 'Employment Type', type: 'select', options: ['Full-time', 'Part-time'], defaultValue: 'Full-time' },
+                { id: 'responsibilities', label: 'Responsibilities (one per line)', type: 'textarea', defaultValue: 'Develop and maintain web applications.\nCollaborate with cross-functional teams.\nDebug and resolve technical issues.' },
+                { id: 'termType', label: 'Term Type', type: 'select', options: ['Fixed Term', 'At Will'], defaultValue: 'At Will' },
+                { id: 'termStartDate', label: 'Term Start Date', type: 'date', defaultValue: '2025-11-01' },
+                { id: 'termEndDate', label: 'Term End Date (if fixed)', type: 'date', defaultValue: '2026-10-31' },
+                { id: 'probationStatus', label: 'Probation Period?', type: 'select', options: ['Yes', 'No'], defaultValue: 'Yes' },
+                { id: 'probationDuration', label: 'Probation Duration', type: 'number', defaultValue: '3' },
+                { id: 'probationUnit', label: 'Probation Unit', type: 'select', options: ['month(s)', 'week(s)'], defaultValue: 'month(s)' },
+                { id: 'baseSalary', label: 'Base Salary ($)', type: 'number', defaultValue: '90000' },
+                { id: 'salaryFrequency', label: 'Salary Frequency', type: 'select', options: ['per hour', 'per week', 'per month', 'per year'], defaultValue: 'per year' },
+                { id: 'paymentSchedule', label: 'Payment Schedule', type: 'select', options: ['weekly', 'bi-weekly', 'monthly'], defaultValue: 'weekly' },
+                { id: 'paymentDay', label: 'Payment Day', defaultValue: 'Friday' },
+            ],
+        },
+        'freelance': {
+            title: "Freelance Contract",
+            templateFn: AGREEMENT_TEMPLATE_FREELANCE,
+            fields: [
+                { id: 'stateOfGoverningLaw', label: 'State of Governing Law', defaultValue: 'California' },
+                { id: 'agreementDate', label: 'Agreement Date', type: 'date', defaultValue: '2025-10-04' },
+                { id: 'clientName', label: 'Client Name', defaultValue: 'Marketing Pro' },
+                { id: 'clientLocation', label: 'Client Location', defaultValue: '123 Market St, San Francisco, CA' },
+                { id: 'contractorName', label: 'Independent Contractor Name', defaultValue: 'Emily White' },
+                { id: 'contractorLocation', label: 'Contractor Location', defaultValue: '456 Writer Ave, Oakland, CA' },
+                { id: 'servicesDescription', label: 'Description of Services', type: 'textarea', defaultValue: 'Write 10 blog posts on the topic of digital marketing, each a minimum of 1000 words.' },
+                { id: 'compensationType', label: 'Compensation Type', type: 'select', options: ['Fixed Wage', 'Set Fee'], defaultValue: 'Set Fee' },
+                { id: 'wageAmount', label: 'Wage Amount ($)', type: 'number', defaultValue: '50' },
+                { id: 'wageFrequency', label: 'Wage Frequency', type: 'select', options: ['per hour', 'per week', 'per month', 'per year'], defaultValue: 'per hour' },
+                { id: 'wagePaymentSchedule', label: 'Wage Payment Schedule', type: 'select', options: ['Weekly', 'Monthly', 'Upon Invoice'], defaultValue: 'Weekly' },
+                { id: 'weeklyPaymentDay', label: 'Weekly Payment Day (if applicable)', defaultValue: 'Friday' },
+                { id: 'monthlyPaymentDay', label: 'Monthly Payment Day (if applicable)', defaultValue: '1st' },
+                { id: 'setFeeAmount', label: 'Set Fee Amount ($)', type: 'number', defaultValue: '1500' },
+                { id: 'setFeePaymentSchedule', label: 'Set Fee Payment Schedule', type: 'select', options: ['After Completion', 'Upon Invoice'], defaultValue: 'Upon Invoice' },
+                { id: 'invoiceDueDays', label: 'Invoice Due Days (if applicable)', type: 'number', defaultValue: '15' },
+            ],
+        }
+    };
+
+    // --- CORE FUNCTIONS ---
+    function renderField(field) {
+        let inputHtml;
+        const onInput = 'oninput="generateAgreement()"';
+
+        if (field.type === 'textarea') {
+            inputHtml = `<textarea id="${field.id}" rows="3" ${onInput}>${field.defaultValue}</textarea>`;
+        } else if (field.type === 'select') {
+            inputHtml = `<select id="${field.id}" ${onInput}>
+                ${field.options.map(opt => `<option value="${opt}" ${field.defaultValue === opt ? 'selected' : ''}>${opt}</option>`).join('')}
+            </select>`;
+        } else {
+            inputHtml = `<input type="${field.type || 'text'}" id="${field.id}" value="${field.defaultValue}" ${onInput}>`;
+        }
+        return `<div class="form-field"><label for="${field.id}">${field.label}</label>${inputHtml}</div>`;
+    }
+
+    function loadTemplate(templateType) {
+        currentTemplateType = templateType;
+        const template = TEMPLATES[templateType];
+        
+        selectionStage.style.display = 'none';
+        editorStage.classList.remove('hidden');
+        
+        document.getElementById('form-title').textContent = `${template.title} Details`;
+        document.getElementById('preview-title').textContent = `${template.title} Preview`;
+        
+        const formContainer = document.getElementById('form-fields-container');
+        formContainer.innerHTML = template.fields.map(field => renderField(field)).join('');
+        
+        generateAgreement();
+    }
+
+    function generateAgreement() {
+        if (!currentTemplateType) return;
+        const template = TEMPLATES[currentTemplateType];
+        const data = {};
+        template.fields.forEach(field => {
+            data[field.id] = document.getElementById(field.id)?.value || '';
+        });
+        document.getElementById('agreement-output').innerHTML = template.templateFn(data);
+    }
+    
+    function showSelectionStage() {
+        selectionStage.style.display = 'block';
+        editorStage.classList.add('hidden');
+    }
+
+    async function downloadPDF() {
+        if (!currentTemplateType) return;
+        loadingOverlay.style.display = 'flex';
+        const element = document.getElementById('agreement-output');
+        const filename = `${currentTemplateType}_agreement.pdf`;
+        const options = { margin: 0.75, filename, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 }, jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }};
+        
+        // Wait a moment for UI to update before generating PDF
+        setTimeout(async () => {
+            await html2pdf().set(options).from(element).save();
+            loadingOverlay.style.display = 'none';
+        }, 100);
+    }
+
+    // --- INITIALIZATION ---
+    const initialTemplates = [
+      { id: "lease", title: "Residential Lease", desc: "For renting residential property.", icon: "🏠" },
+      { id: "nda", title: "NDA", desc: "To protect confidential information.", icon: "🔒" },
+      { id: "service", title: "Service Agreement", desc: "To define terms for services rendered.", icon: "🤝" },
+      { id: "employment", title: "Employment Contract", desc: "To formalize an employment offer.", icon: "💼" },
+      { id: "freelance", title: "Freelance Contract", desc: "For independent contractor work.", icon: "✍️" }
+    ];
+
+    initialTemplates.forEach(t => {
+      const card = document.createElement("div");
+      card.className = "template-card";
+      card.innerHTML = `
+        <div class="tmpl-icon">${t.icon}</div>
+        <div class="tmpl-content">
+            <div class="tmpl-title">${t.title}</div>
+            <div class="tmpl-desc">${t.desc}</div>
+        </div>
+        <div class="tmpl-arrow">→</div>
+      `;
+      card.addEventListener("click", () => loadTemplate(t.id));
+      listContainer.appendChild(card);
+    });
+  </script>
+</body>
+</html>

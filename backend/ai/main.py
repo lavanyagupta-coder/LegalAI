@@ -6,38 +6,42 @@ from dotenv import load_dotenv
 # Load environment variables before importing AI utilities
 load_dotenv()
 
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 # Import your existing utils
 from backend.ai.utils.pdf_reader import extract_text_from_pdf
+from backend.ai.utils import ai_summarizer
 from backend.ai.utils.ai_summarizer import analyze_document, summarize_text, extract_clauses, compare_documents
+from backend.ai.database import init_db
+from backend.ai.auth import router as auth_router, get_current_user
 
 # -------------------------------
-# ✅ Load environment and model
+# Load environment and model
 # -------------------------------
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-# Note: ML model removed - now using OpenAI for all AI features
+init_db()
 
 # -------------------------------
-# ✅ FastAPI app setup
+# FastAPI app setup
 # -------------------------------
 app = FastAPI()
+app.include_router(auth_router)
 
 origins = [
     "http://127.0.0.1:5503",  # Local frontend
     "http://localhost:5503",  # Local frontend
-    "https://turbo-space-fishstick-5g5v5g944q94cr5r-5503.app.github.dev",  # Frontend URL
-    "https://turbo-space-fishstick-5g5v5g944q94cr5r-8016.app.github.dev"   # Backend URL
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    # Matches any GitHub Codespaces forwarded URL, e.g.
+    # https://<codespace-name>-5503.app.github.dev
+    allow_origin_regex=r"https://.*\.app\.github\.dev",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -78,14 +82,28 @@ def build_distribution(risks: list[dict]) -> dict:
     return distribution
 
 # -------------------------------
-# ✅ Existing routes
+# Existing routes
 # -------------------------------
 @app.get("/")
 def home():
     return {"message": "Backend is running 🚀"}
 
+
+@app.get("/health")
+def health():
+    """Lets the frontend (or you, via curl) check AI configuration without
+    having to upload a file and wait for a failure."""
+    configured = ai_summarizer.is_configured()
+    return {
+        "status": "ok",
+        "ai_provider_configured": configured,
+        "model": ai_summarizer.current_model() if configured else None,
+        "base_url": ai_summarizer.current_base_url() or "https://api.openai.com/v1 (default)",
+    }
+
+
 @app.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     try:
         filename = os.path.basename(file.filename)
         dest = os.path.join(UPLOAD_DIR, filename)
@@ -108,10 +126,10 @@ async def upload_file(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Failed to process file: {str(e)}")
 
 # -------------------------------
-# ✅ NEW: Risk Analyzer Endpoint
+# Risk Analyzer Endpoint
 # -------------------------------
 @app.post("/analyze")
-async def analyze_risk_endpoint(file: UploadFile = File(...)):
+async def analyze_risk_endpoint(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     try:
         content = await file.read()
         temp_path = os.path.join(UPLOAD_DIR, file.filename)
@@ -175,10 +193,10 @@ async def analyze_risk_endpoint(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Failed to analyze risk: {str(e)}")
 
 # -------------------------------
-# ✅ NEW: Clause Extraction Endpoint
+# Clause Extraction Endpoint
 # -------------------------------
 @app.post("/extract-clauses")
-async def extract_clauses_endpoint(file: UploadFile = File(...)):
+async def extract_clauses_endpoint(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     try:
         content = await file.read()
         temp_path = os.path.join(UPLOAD_DIR, file.filename)
@@ -202,10 +220,14 @@ async def extract_clauses_endpoint(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Failed to extract clauses: {str(e)}")
 
 # -------------------------------
-# ✅ NEW: Document Comparison Endpoint
+# Document Comparison Endpoint
 # -------------------------------
 @app.post("/compare")
-async def compare_documents_endpoint(file1: UploadFile = File(...), file2: UploadFile = File(...)):
+async def compare_documents_endpoint(
+    file1: UploadFile = File(...),
+    file2: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
     try:
         # Process first file
         content1 = await file1.read()
@@ -224,7 +246,6 @@ async def compare_documents_endpoint(file1: UploadFile = File(...), file2: Uploa
         if not text1.strip() or not text2.strip():
             return JSONResponse({"comparison": "Unable to compare - one or both documents have no readable text."}, status_code=200)
 
-        # compare documents using OpenAI
         comparison_result = compare_documents(text1, text2)
 
         return JSONResponse({
@@ -236,7 +257,8 @@ async def compare_documents_endpoint(file1: UploadFile = File(...), file2: Uploa
     except Exception as e:
         logging.error("Document comparison failed:\n" + traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Failed to compare documents: {str(e)}")
+
+
 if __name__ == "__main__":
     import uvicorn
-    # The first argument 'app' should match your FastAPI variable (e.g., app = FastAPI())
     uvicorn.run("backend.ai.main:app", host="0.0.0.0", port=8016, reload=True)

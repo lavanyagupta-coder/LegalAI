@@ -8,6 +8,10 @@ const viewAnalysisBtn = document.getElementById("viewAnalysisBtn");
 const viewFullAnalysisBtn = document.getElementById("viewFullAnalysisBtn");
 const fileNameDisplay = document.getElementById("fileName");
 
+// Backend base URL. Set by frontend/js/config.js, which must be loaded
+// before this script. Falls back to localhost if config.js wasn't included.
+const API_BASE_URL = window.API_BASE_URL || "http://127.0.0.1:8016";
+
 // =============================
 // STATUS UPDATE FUNCTION
 // =============================
@@ -228,7 +232,6 @@ function exportReport(result, fileName) {
         aiModel: "OpenAI GPT-4o-mini"
     };
 
-    // Create downloadable JSON file
     const dataStr = JSON.stringify(reportData, null, 2);
     const dataBlob = new Blob([dataStr], {type: 'application/json'});
 
@@ -239,10 +242,9 @@ function exportReport(result, fileName) {
     link.click();
     document.body.removeChild(link);
 
-    // Show export status
-        const exportStatusElements = document.querySelectorAll(".exportStatus");
-        exportStatusElements.forEach(exportStatus => {
-            exportStatus.textContent = "✅ Report exported successfully!";
+    const exportStatusElements = document.querySelectorAll(".exportStatus");
+    exportStatusElements.forEach(exportStatus => {
+        exportStatus.textContent = "✅ Report exported successfully!";
         exportStatus.style.display = "block";
         exportStatus.style.color = "#388e3c";
         setTimeout(() => {
@@ -250,7 +252,6 @@ function exportReport(result, fileName) {
         }, 3000);
     });
 }
-
 
 // =============================
 // FILE UPLOAD HANDLER
@@ -262,11 +263,10 @@ if (fileInput) {
             updateStatus(`📤 Uploading and analyzing "<b>${file.name}</b>"...`, 'info');
 
             try {
-                // Call /analyze endpoint for risk analysis and summary
                 const analyzeFormData = new FormData();
                 analyzeFormData.append("file", file);
 
-                const analyzeResponse = await fetch("http://127.0.0.1:8016/analyze", {
+                const analyzeResponse = await authFetch(`${API_BASE_URL}/analyze`, {
                     method: "POST",
                     body: analyzeFormData,
                 });
@@ -284,12 +284,10 @@ if (fileInput) {
 
                 console.log("🔄 Combined result:", combinedResult);
 
-                // Update UI with results
                 updateAnalysisResults(combinedResult, file.name);
                 showAnalysisView(file.name);
                 updateDashboard(combinedResult);
 
-                // Store in session storage
                 sessionStorage.setItem('analyzedFileName', file.name);
                 sessionStorage.setItem('analysisResult', JSON.stringify(combinedResult));
 
@@ -297,7 +295,7 @@ if (fileInput) {
 
             } catch (error) {
                 console.error("❌ Analysis Error:", error);
-                updateStatus(`❌ Analysis failed: ${error.message}`, 'error');
+                updateStatus(`❌ Analysis failed: ${error.message}. Backend URL: ${API_BASE_URL}`, 'error');
             }
         }
     });
@@ -322,7 +320,6 @@ if (viewFullAnalysisBtn && fileNameDisplay) {
     });
 }
 
-// Export report functionality
 const exportButtons = document.querySelectorAll(".exportReportBtn");
 exportButtons.forEach(button => {
     button.addEventListener("click", () => {
@@ -357,7 +354,6 @@ function initializeDashboard() {
     const dashboardSection = document.getElementById("dashboard");
     if (!dashboardSection) return;
 
-    // Set default content for when no document is uploaded
     const documentTitle = dashboardSection.querySelector('.document-title');
     const documentMeta = dashboardSection.querySelector('.document-meta');
     const statusBadge = dashboardSection.querySelector('.status-badge');
@@ -370,7 +366,6 @@ function initializeDashboard() {
         statusBadge.style.color = '#3730a3';
     }
 
-    // Set default summary
     const summaryParagraphs = dashboardSection.querySelectorAll('.summary-content .summary-paragraph');
     if (summaryParagraphs.length > 0) {
         summaryParagraphs[0].textContent = 'Upload a PDF, DOC, or DOCX file to generate a real summary, risk analysis, and clause review from the document text.';
@@ -405,7 +400,6 @@ function initializeDashboard() {
     }
 }
 
-// Additional event listeners
 document.getElementById("downloadSummaryBtn")?.addEventListener("click", () => {
     const exportStatus = document.getElementById("summaryStatus");
     if (exportStatus) exportStatus.style.display = "block";

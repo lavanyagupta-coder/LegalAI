@@ -9,7 +9,7 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const pdfParse = require('pdf-parse');
 
-dotenv.config(); // Load .env file
+dotenv.config(); // Load .env file from project root
 
 const app = express();
 app.use(cors());
@@ -23,11 +23,14 @@ if (!fs.existsSync('uploads')) {
   fs.mkdirSync('uploads');
 }
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY; // ✅ Use OpenAI instead of Gemini
-const PORT = 3000;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+// Same env vars the Python backend uses, so one .env configures both services.
+const OPENAI_BASE_URL = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/+$/, "");
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+const PORT = process.env.CHAT_PORT || 3000;
 
 if (!OPENAI_API_KEY) {
-  console.error("❌ OpenAI API key not found. Did you create .env?");
+  console.error("❌ OPENAI_API_KEY not found. Create a .env file in the project root (see .env.example).");
   process.exit(1);
 }
 
@@ -54,6 +57,16 @@ async function extractTextFromFile(filePath, filename) {
 
 app.get("/", (req, res) => {
   res.send("✅ Backend is running with OpenAI API support");
+});
+
+// Lets you confirm the key/config are picked up without sending a chat message.
+app.get("/health", (req, res) => {
+  res.json({
+    status: "ok",
+    ai_provider_configured: Boolean(OPENAI_API_KEY),
+    model: OPENAI_MODEL,
+    base_url: OPENAI_BASE_URL,
+  });
 });
 
 // Store uploaded documents in memory for chat context
@@ -106,13 +119,16 @@ app.post("/chat", async (req, res) => {
     const documentId = req.body.documentId; // Optional document context
     console.log("📩 Received:", userMessage, documentId ? `with document ${documentId}` : "");
 
+    if (!userMessage || !userMessage.trim()) {
+      return res.status(400).json({ error: "Message is required" });
+    }
+
     let contextMessage = userMessage;
 
     // If a document is specified, include its content in the context
     if (documentId) {
       const document = uploadedDocuments.find(doc => doc.id === documentId);
       if (document) {
-        // Read document content if not already cached
         if (!document.content) {
           try {
             document.content = fs.readFileSync(document.path, 'utf8');
@@ -125,14 +141,14 @@ app.post("/chat", async (req, res) => {
       }
     }
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${OPENAI_API_KEY}`
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: OPENAI_MODEL,
         messages: [
           {
             role: "system",
@@ -149,22 +165,32 @@ app.post("/chat", async (req, res) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("❌ OpenAI API Error:", errorText);
-      return res.status(500).json({ error: "OpenAI API error", details: errorText });
+      console.error(`❌ AI provider error (${response.status}):`, errorText);
+
+      let friendlyError = "The AI provider returned an error.";
+      if (response.status === 401) {
+        friendlyError = "The AI provider rejected the API key. Check OPENAI_API_KEY in your .env file.";
+      } else if (response.status === 429) {
+        friendlyError = "Rate limit or quota exceeded on the AI provider. Please wait and try again, or check billing.";
+      } else if (response.status >= 500) {
+        friendlyError = "The AI provider is temporarily unavailable. Please try again shortly.";
+      }
+
+      return res.status(502).json({ error: friendlyError, details: errorText });
     }
 
     const data = await response.json();
     const aiMessage = data?.choices?.[0]?.message?.content || "⚠️ No AI response";
 
-    console.log("🤖 OpenAI replied:", aiMessage.substring(0, 100) + "...");
+    console.log("🤖 AI replied:", aiMessage.substring(0, 100) + "...");
 
     res.json({ reply: aiMessage });
   } catch (err) {
     console.error("❌ Server Error:", err);
-    res.status(500).json({ error: "Internal server error" });
+    res.status(500).json({ error: "Internal server error. Is the AI provider reachable from this server?" });
   }
 });
 
 app.listen(PORT, () =>
-  console.log(`✅ Backend running on http://127.0.0.1:${PORT}`)
+  console.log(`✅ Chat backend running on http://127.0.0.1:${PORT} (model: ${OPENAI_MODEL})`)
 );

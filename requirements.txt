@@ -3,4 +3,7 @@ uvicorn[standard]
 python-multipart
 python-dotenv
 PyPDF2
-openai
+openai>=1.30.0,<2.0.0
+pyjwt>=2.9.0
+bcrypt>=4.1.0
+email-validator>=2.1.0
